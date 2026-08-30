@@ -92,17 +92,17 @@ await client.connect().then(async() => {
         compiler.stderr.on("data", (chunk) => {
             compileError += chunk.toString();
         });
-
-        compileError = compileError.replace(
-            new RegExp(filePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
-            "a.cpp"
-        );
         
         const compileExitCode = await new Promise<number>((resolve) => {
             compiler.on("close", (code) => {
                 resolve(code ?? 1);
             });
         });
+
+        compileError = compileError.replace(
+            /.*\\([^\\]+\.cpp)/g,
+            "$1"
+        );
         
         if (compileExitCode !== 0) {
             console.log(compileError)
@@ -153,6 +153,5 @@ await client.connect().then(async() => {
         );
     }
     }
-
 })
 

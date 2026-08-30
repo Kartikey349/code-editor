@@ -2,9 +2,14 @@ import express from "express"
 const app = express()
 import { client } from "./redisClient"
 import { prisma } from "./db";
+import cors from "cors"
 
 await client.connect();
 
+app.use(cors({
+    origin: "http://localhost:3000",
+     methods: 'GET,POST,PUT,DELETE'
+}))
 app.use(express.json())
 
 app.post("/submission", async (req,res)=> {
@@ -30,8 +35,16 @@ app.post("/submission", async (req,res)=> {
         id: response.id
     })
 })
-app.get("/submission/:submissinId", (req,res)=> {
-    res.send("hello")
+app.get("/submission/:submissinId", async (req,res)=> {
+    const response = await prisma.submission.findFirst({
+        where:{
+            id: req.params.submissinId
+        }
+    })
+    res.json({
+        output: response?.output,
+        status: response?.status
+    })
 })
 
 
