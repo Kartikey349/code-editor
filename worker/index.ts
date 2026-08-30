@@ -1,6 +1,59 @@
 import { spawn } from "child_process";
 import { createClient } from "redis";
 import fs from "fs"
+import { prisma } from "./db";
+
+
+const executeProcess = async (
+    command: string,
+    args: string[],
+    submissionId: string
+) => {
+    const child = spawn(command, args);
+
+    let output = "";
+    let error = "";
+
+    child.stdout.on("data", (chunk) => {
+        output += chunk.toString();
+    });
+
+    child.stderr.on("data", (chunk) => {
+        error += chunk.toString();
+    });
+
+    const exitCode = await new Promise<number>((resolve, reject) => {
+        child.on("close", (code) => {
+            resolve(code ?? 1);
+        });
+
+        child.on("error", (err) => {
+            reject(err);
+        });
+    });
+
+    if (exitCode === 0) {
+        await prisma.submission.update({
+            where: {
+                id: submissionId
+            },
+            data: {
+                status: "Success",
+                output: output
+            }
+        });
+    } else {
+        await prisma.submission.update({
+            where: {
+                id: submissionId
+            },
+            data: {
+                status: "Failed",
+                output: error
+            }
+        });
+    }
+};
 
 const client = createClient()
 await client.connect().then(async() => {
@@ -17,43 +70,88 @@ await client.connect().then(async() => {
         const parsedResponse = JSON.parse(response)
         const code = parsedResponse.code;
         const language = parsedResponse.language
+        const submissionId =  parsedResponse.submissonId
+        let finalOutput = ""
 
-        if(language === "cpp"){
-            const filePath = __dirname + "\\code\\a.cpp";
-            const outputPath = __dirname + "\\code\\out.exe";
+    if (language === "cpp") {
 
-            console.log("Processing cpp code");
+        const filePath = __dirname + `\\code\\${submissionId}.cpp`;
+        const outputPath = __dirname + `\\code\\${submissionId}.exe`;
 
-            fs.writeFileSync(filePath, code)
+        fs.writeFileSync(filePath, code);
 
-            const compiled = spawn("g++", [filePath, "-o",outputPath])
+        // Compile
+        const compiler = spawn("g++", [
+            filePath,
+            "-o",
+            outputPath
+        ]);
 
-            await new Promise((r) => setTimeout(r,2000));
-            const child = spawn(outputPath)
-            child.stdout.on("data", (chunk) => {
-                console.log(chunk.toString())
-            })
+        let compileError = "";
+
+        compiler.stderr.on("data", (chunk) => {
+            compileError += chunk.toString();
+        });
+
+        compileError = compileError.replace(
+            new RegExp(filePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
+            "a.cpp"
+        );
+        
+        const compileExitCode = await new Promise<number>((resolve) => {
+            compiler.on("close", (code) => {
+                resolve(code ?? 1);
+            });
+        });
+        
+        if (compileExitCode !== 0) {
+            console.log(compileError)
+
+            await prisma.submission.update({
+                where: {
+                    id: submissionId
+                },
+                data: {
+                    status: "Failed",
+                    output: compileError
+                }
+            });
+
+            continue;
         }
 
-        if(language === "py"){
-            const filePath= __dirname + "\\code\\a.py"
-            // console.log("Processing py code");
-            fs.writeFileSync(filePath, code)
-            const child = spawn("python", [filePath!] )
-            child.stdout.on("data", (chunk) => {
-                console.log(chunk.toString())
-            })
-        }
+        await executeProcess(
+            outputPath,
+            [],
+            submissionId
+        );
+    }
 
-        if(language === "js"){
-            const filePath= __dirname + "\\code\\a.js"
-            console.log("Processing js code");
-            fs.writeFileSync(filePath, code)
-            const child = spawn("node", [filePath!] )
-            child.stdout.on("data", (chunk) => {
-                console.log(chunk.toString())
-            })
-        }
+    if (language === "py") {
+
+        const filePath = __dirname + `\\code\\${submissionId}.py`;
+
+        fs.writeFileSync(filePath, code);
+
+        await executeProcess(
+            "python",
+            [filePath],
+            submissionId
+        );
+    }
+
+    if (language === "js") {
+
+        const filePath = __dirname + `\\code\\${submissionId}.js`;
+
+        fs.writeFileSync(filePath, code);
+
+        await executeProcess(
+            "node",
+            [filePath],
+            submissionId
+        );
+    }
     }
 
 })
