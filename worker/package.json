@@ -16,6 +16,8 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "7",
+    "@types/express": "^5.0.6",
+    "express": "^5.2.1",
     "redis": "^6.2.1"
   }
 }

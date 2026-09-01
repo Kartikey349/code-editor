@@ -2,7 +2,9 @@ import { spawn } from "child_process";
 import { createClient } from "redis";
 import fs from "fs"
 import { prisma } from "./db";
+import express from "express"
 
+const app = express()
 
 const executeProcess = async (
     command: string,
@@ -157,3 +159,6 @@ await client.connect().then(async() => {
     }
 })
 
+app.listen(3002, "0.0.0.0", () => {
+  console.log(`Worker running on 3002`);
+});
