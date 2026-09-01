@@ -55,7 +55,9 @@ const executeProcess = async (
     }
 };
 
-const client = createClient()
+export const client = createClient({
+  url: process.env.REDIS_URL
+});
 await client.connect().then(async() => {
     while(true){
         const response = await client.rPop("problems")
